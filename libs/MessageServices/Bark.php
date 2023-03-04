@@ -147,7 +147,6 @@ class Bark extends MessageGateway
         $footer = '';
 
         $footer .= lang('100078');
-        $footer .= lang('100079');
 
         return $footer;
     }
@@ -244,15 +243,21 @@ class Bark extends MessageGateway
     {
         $this->check($content, $data);
 
+        $commonFooter = '';
+
         if ($type === 1 || $type === 4) {
-            // Do nothing
+            $this->setCommonFooter($commonFooter, "\n", false);
         } else if ($type === 2) {
+            $this->setCommonFooter($commonFooter, "\n", false);
             $content = $this->genDomainRenewalResultsText($data['username'], $data['renewalSuccessArr'], $data['renewalFailuresArr'], $data['domainStatusArr']);
         } else if ($type === 3) {
+            $this->setCommonFooter($commonFooter);
             $content = $this->genDomainStatusFullText($data['username'], $data['domainStatusArr']);
         } else {
             throw new \Exception(lang('100003'));
         }
+
+        $content .= $commonFooter;
 
         $query = [
             'level' => $this->level,

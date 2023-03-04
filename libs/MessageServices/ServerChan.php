@@ -67,7 +67,6 @@ class ServerChan extends MessageGateway
         $footer = '';
 
         $footer .= lang('100091');
-        $footer .= lang('100092');
 
         return $footer;
     }
@@ -165,15 +164,21 @@ class ServerChan extends MessageGateway
     {
         $this->check($content, $data);
 
+        $commonFooter = '';
+
         if ($type === 1 || $type === 4) {
-            // Do nothing
+            $this->setCommonFooter($commonFooter, "\n", false);
         } else if ($type === 2) {
+            $this->setCommonFooter($commonFooter, "\n", false);
             $content = $this->genDomainRenewalResultsMarkDownText($data['username'], $data['renewalSuccessArr'], $data['renewalFailuresArr'], $data['domainStatusArr']);
         } else if ($type === 3) {
+            $this->setCommonFooter($commonFooter);
             $content = $this->genDomainStatusFullMarkDownText($data['username'], $data['domainStatusArr']);
         } else {
             throw new \Exception(lang('100003'));
         }
+
+        $content .= $commonFooter;
 
         $subject = $subject === '' ? mb_substr($content, 0, 12) . '...' : $subject;
 

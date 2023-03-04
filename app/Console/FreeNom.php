@@ -11,6 +11,7 @@
 namespace Luolongfei\App\Console;
 
 use Luolongfei\App\Exceptions\LlfException;
+use Luolongfei\App\Exceptions\WarningException;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
 use Luolongfei\Libs\Log;
@@ -18,7 +19,7 @@ use Luolongfei\Libs\Message;
 
 class FreeNom extends Base
 {
-    const VERSION = 'v0.4.5';
+    const VERSION = 'v0.5.1';
 
     const TIMEOUT = 33;
 
@@ -39,6 +40,9 @@ class FreeNom extends Base
 
     // 匹配登录状态的正则
     const LOGIN_STATUS_REGEX = '/<li.*?Logout.*?<\/li>/i';
+
+    // 匹配无域名的正则
+    const NO_DOMAIN_REGEX = '/<tr\sclass="carttablerow"><td\scolspan="5">(?P<msg>[^<]+)<\/td><\/tr>/i';
 
     /**
      * @var Client
@@ -83,7 +87,7 @@ class FreeNom extends Base
             'headers' => [
                 'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
                 'Accept-Encoding' => 'gzip, deflate, br',
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36',
+                'User-Agent' => sprintf('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%s Safari/537.36', get_random_user_agent()),
             ],
             'timeout' => self::TIMEOUT,
             CURLOPT_FOLLOWLOCATION => true,
@@ -141,9 +145,14 @@ class FreeNom extends Base
      *
      * @return array
      * @throws LlfException
+     * @throws WarningException
      */
     protected function getAllDomains(string $domainStatusPage)
     {
+        if (preg_match(self::NO_DOMAIN_REGEX, $domainStatusPage, $m)) {
+            throw new WarningException(34520014, [$this->username, $m['msg']]);
+        }
+
         if (!preg_match_all(self::DOMAIN_INFO_REGEX, $domainStatusPage, $allDomains, PREG_SET_ORDER)) {
             throw new LlfException(34520003);
         }
@@ -414,11 +423,11 @@ class FreeNom extends Base
 
         foreach ($accounts as $index => $account) {
             try {
-                $num = $index + 1;
-                system_log(sprintf(lang('100050'), get_local_num($num), $num, $totalAccounts));
-
                 $this->username = $account['username'];
                 $this->password = $account['password'];
+
+                $num = $index + 1;
+                system_log(sprintf(lang('100050'), get_local_num($num), $this->username, $num, $totalAccounts));
 
                 $this->jar = new CookieJar(); // 所有请求共用一个 CookieJar 实例
                 $this->login($this->username, $this->password);
@@ -428,6 +437,8 @@ class FreeNom extends Base
                 $token = $this->getToken($domainStatusPage);
 
                 $this->renewAllDomains($allDomains, $token);
+            } catch (WarningException $e) {
+                system_log(sprintf(lang('100129'), $e->getMessage()));
             } catch (LlfException $e) {
                 system_log(sprintf(lang('100051'), $e->getMessage()));
                 $this->sendExceptionReport($e);

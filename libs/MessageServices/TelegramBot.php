@@ -28,6 +28,11 @@ class TelegramBot extends MessageGateway
     protected $token;
 
     /**
+     * @var string Telegram 主机地址
+     */
+    protected $host;
+
+    /**
      * @var Client
      */
     protected $client;
@@ -36,6 +41,7 @@ class TelegramBot extends MessageGateway
     {
         $this->chatID = config('message.telegram.chat_id');
         $this->token = config('message.telegram.token');
+        $this->host = $this->getTelegramHost();
 
         $this->client = new Client([
             'headers' => [
@@ -45,8 +51,24 @@ class TelegramBot extends MessageGateway
             'timeout' => self::TIMEOUT,
             'verify' => config('verify_ssl'),
             'debug' => config('debug'),
-            'proxy' => config('message.telegram.proxy') ?: null,
+            'proxy' => config('message.telegram.proxy'),
         ]);
+    }
+
+    /**
+     * 获取 Telegram 主机地址
+     *
+     * @return string
+     */
+    private function getTelegramHost()
+    {
+        $host = (string)config('message.telegram.host');
+
+        if (preg_match('/^(?:https?:\/\/)?(?P<host>[^\/?\n]+)/iu', $host, $m)) {
+            return $m['host'];
+        }
+
+        return 'api.telegram.org';
     }
 
     /**
@@ -78,7 +100,6 @@ class TelegramBot extends MessageGateway
         $footer = '';
 
         $footer .= lang('100103');
-        $footer .= lang('100104');
 
         return $footer;
     }
@@ -102,7 +123,7 @@ class TelegramBot extends MessageGateway
             $domainStatusMarkDownText .= sprintf(lang('100106'), $domain, $domain, $daysLeft);
         }
 
-        $domainStatusMarkDownText = rtrim(rtrim($domainStatusMarkDownText, ' '), '，,') . lang('100107');
+        $domainStatusMarkDownText = rtrim(rtrim($domainStatusMarkDownText, ' '), "，,\n") . lang('100107');
 
         return $domainStatusMarkDownText;
     }
@@ -231,15 +252,21 @@ class TelegramBot extends MessageGateway
     {
         $this->check($content, $data);
 
+        $commonFooter = '';
+
         if ($type === 1 || $type === 4) {
-            // Do nothing
+            $this->setCommonFooter($commonFooter, "\n", false);
         } else if ($type === 2) {
+            $this->setCommonFooter($commonFooter, "\n", false);
             $content = $this->genDomainRenewalResultsMarkDownText($data['username'], $data['renewalSuccessArr'], $data['renewalFailuresArr'], $data['domainStatusArr']);
         } else if ($type === 3) {
+            $this->setCommonFooter($commonFooter);
             $content = $this->genDomainStatusFullMarkDownText($data['username'], $data['domainStatusArr']);
         } else {
             throw new \Exception(lang('100003'));
         }
+
+        $content .= $commonFooter;
 
         $isMarkdown = true;
 
@@ -272,10 +299,10 @@ class TelegramBot extends MessageGateway
 
         try {
             $resp = $this->client->post(
-                sprintf('https://api.telegram.org/bot%s/sendMessage', $this->token),
+                sprintf('https://%s/bot%s/sendMessage', $this->host, $this->token),
                 [
                     'form_params' => [
-                        'chat_id' => $recipient ? $recipient : $this->chatID,
+                        'chat_id' => $recipient ?: $this->chatID,
                         'text' => $content, // Text of the message to be sent, 1-4096 characters after entities parsing
                         'parse_mode' => $isMarkdown ? 'MarkdownV2' : 'HTML',
                         'disable_web_page_preview' => true,
